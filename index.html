@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Wire Calculator</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Itim&family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap"
+        rel="stylesheet">
+</head>
+
+<body class="d-flex justify-content-center align-items-center vh-100 bg-light"
+    style="font-family: 'Noto Sans', sans-serif;">
+
+    <div class="p-4 border rounded bg-white shadow ">
+
+        <h3 class="text-center">โปรแกรมคำนวณขนาดสายไฟสำหรับจอ LED</h3>
+
+        <!-- Input for Screen Size -->
+        LED SCREEN SIZE :
+        <form class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Width</label>
+                <input type="text" class="form-control" id="screenWidth" placeholder="ความกว้างหน้าจอ(m)"
+                    oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Height</label>
+                <input type="text" class="form-control" id="screenHeight" placeholder="ความสูงหน้าจอ(m)"
+                    oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');">
+            </div>
+
+            <!-- Input For Electrical power per square meter -->
+            <div class="col-md-6">
+                <label class="form-label">Power consumption W/m²</label>
+                <input type="text" class="form-control" id="powerPerSquareMeter"
+                    placeholder="กำลังไฟฟ้าต่อพื้นที่ (W/m²)"
+                    oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');">
+            </div>
+
+            <div class="row g-3">
+                <!-- Input Radio for Phase -->
+
+                <div class="col-md-6">
+                    <label class="form-label">Phase</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="radioPhase" id="1Phase" checked>
+                        <label class="form-check-label" for="radioPhase"></label>
+                            1 Phase
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="radioPhase" id="3Phase">
+                        <label class="form-check-label" for="radioPhase">
+                            3 Phase
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Input for Installation Type -->
+                <div class="col-md-6">
+                    <label class="form-label">Installation Type</label>
+                    <select class="form-select" id="installationType">
+                        <option value="1">1: Floating in the air / in conduit (inside the building)</option>
+                        <option value="2">2: Exposed / pipe threading (outside the building / requires durability)
+                        </option>
+                        <option value="3">3: Buried underground / in the ground (requires durability)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!--Submit Button-->
+            <div class="col-12">
+                <button type="button" class="btn btn-primary" id="calculateButton">Calculate</button>
+            </div>
+
+        </form>
+
+        <!-- Result Display -->
+        <div class="mt-4">
+            <div class="alert alert-info" id="result" style="display: none;">
+                <p><strong>Cable Type:</strong> <span id="cableType"></span></p>
+                <p><strong>Wire Size:</strong> <span id="cableSize"></span> mm²</p>
+                <p><strong>Cable Ampacity:</strong> <span id="cableAmpacity"></span> A</p>
+                <p><strong>Appropriate number of circuits:</strong> at least <span id="circuitCount"></span></p>
+                <p><strong>Recommended circuit breaker (MCB) size:</strong> <span id="mcbSize"></span> A</p>
+            </div>
+
+            <div class="alert alert-danger" id="error" style="display: none;">
+                <p>The appropriate wire size was not found in the table. Please consult an electrical engineer.</p>
+            </div>
+        </div>
+    </div>
+
+            <script>
+        document.getElementById('calculateButton').addEventListener('click', function () {
+            const screenWidth = parseFloat(document.getElementById('screenWidth').value);
+            const screenHeight = parseFloat(document.getElementById('screenHeight').value);
+            const powerPerSquareMeter = parseFloat(document.getElementById('powerPerSquareMeter').value);
+            const installationType = document.getElementById('installationType').value;
+            const phase = document.querySelector('input[name="radioPhase"]:checked').id;
+
+            if (isNaN(screenWidth) || isNaN(screenHeight) || isNaN(powerPerSquareMeter)) {
+                alert("Please enter valid numbers for all fields.");
+                return;
+            }
+
+            // Calculate total power consumption
+            const totalPower = screenWidth * screenHeight * powerPerSquareMeter;
+
+            // Determine cable type and size based on the total power and installation type
+            let powerfactor, cableType, cableSize, cableAmpacity, circuitCount, mcbSize;
+            let derating_factor = 1.0;
+            let cable_type_name = "Unspecified";
+            let voltage = phase === "1Phase" ? 220 : 380;
+            let pf = 0.95;
+            let current = phase === "1Phase" ? totalPower / (voltage * pf) : totalPower / (Math.sqrt(3) * voltage * pf);
+            let required_current;
+            let suitable_cable_size = null;
+            let cable_ampacity = 0;
+            let breaker_rating = 0;
+            let num_circuits = 1;
+
+            // Installation Type
+            if (installationType === "1") {
+                derating_factor = 0.8;
+                cable_type_name = "THW";
+            } else if (installationType === "2") {
+                derating_factor = 0.9;
+                cable_type_name = "VCT";
+            } else if (installationType === "3") {
+                derating_factor = 1.0;
+                cable_type_name = "NYY";
+            }
+
+            required_current = current / derating_factor;
+
+            // Cable Size Table
+            const cable_table = {
+                1.5: 18, 2.5: 24, 4: 32, 6: 42, 10: 57, 16: 76,
+                25: 101, 35: 125, 50: 155, 70: 190, 95: 230,
+                120: 265, 150: 305, 185: 350, 240: 410, 300: 475
+            };
+
+            for (let size in cable_table) {
+                if (cable_table[size] >= required_current) {
+                    suitable_cable_size = size;
+                    cable_ampacity = cable_table[size];
+                    break;
+                }
+            }
+
+            if (suitable_cable_size) {
+                breaker_rating = Math.floor(cable_ampacity * 0.8);
+                if (current > breaker_rating) {
+                    num_circuits = Math.ceil(current / breaker_rating);
+                }
+            } else {
+                num_circuits = 1;
+            }
+
+            // Display results
+            if (suitable_cable_size) {
+                document.getElementById('cableType').innerText = cable_type_name;
+                document.getElementById('cableSize').innerText = suitable_cable_size;
+                document.getElementById('cableAmpacity').innerText = cable_ampacity;
+                document.getElementById('circuitCount').innerText = num_circuits;
+                document.getElementById('mcbSize').innerText = breaker_rating;
+                document.getElementById('result').style.display = 'block';
+                document.getElementById('error').style.display = 'none';
+            } else {
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('result').style.display = 'none';
+            }
+        });
+    </script>
+    
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
